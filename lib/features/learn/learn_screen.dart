@@ -90,7 +90,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                   0,
                 ),
                 child: SessionProgressHeader(
-                  title: 'O‘rganish',
+                  title: state.isReviewSession ? 'Takrorlash' : 'O‘rganish',
                   counterLabel:
                       '${state.learnProgressNumber} / ${state.learnCount}',
                   progress: state.learnProgress,

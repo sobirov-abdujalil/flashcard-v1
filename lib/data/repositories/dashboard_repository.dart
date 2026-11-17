@@ -45,10 +45,16 @@ class DashboardRepository {
     final List<String> completedKeys = await _progressRepository
         .completedSessionDateKeys();
 
+    final int dueReviews = await _progressRepository.dueReviewCount(clock);
+    final DateTime? nextReview = dueReviews == 0
+        ? await _progressRepository.nextReviewDate(clock)
+        : null;
+
     return HomeSnapshot(
       dailyGoal: dailyGoal,
       completedToday: completedToday,
-      dueReviews: await _progressRepository.dueReviewCount(clock),
+      dueReviews: dueReviews,
+      nextReviewAt: nextReview,
       totalWordsStudied: aggregates['studied'] ?? 0,
       totalVocabulary: await _database.vocabularyCount(),
       rememberedWords: aggregates['remembered'] ?? 0,

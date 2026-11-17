@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:sqflite/sqflite.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../core/utils/local_date.dart';
 import '../../domain/scheduler/spaced_repetition_scheduler.dart';
 import '../../domain/session/answer_options_generator.dart';
@@ -101,6 +102,45 @@ class SessionRepository {
       words: sessionWords,
       questions: questions,
       dailyGoal: dailyGoal < 1 ? size : dailyGoal,
+    );
+  }
+
+  /// Builds a review-only session: every due word, oldest due first, with no
+  /// new words and no fallback. Every answered question is persisted through
+  /// the existing spaced-repetition scheduler.
+  Future<LearningSession> createReviewSession({DateTime? now}) async {
+    final DateTime clock = now ?? DateTime.now();
+
+    // All due words — no limit small enough to truncate the queue. New words
+    // are never mixed into a review session.
+    final List<Word> dueWords = await _vocabularyRepository.dueWords(
+      now: clock,
+      limit: AppConstants.defaultSessionSize * 20,
+    );
+    if (dueWords.isEmpty) {
+      throw const SessionUnavailableException(
+        'Hozircha takrorlash kerak bo‘lgan so‘z yo‘q.',
+      );
+    }
+
+    final List<SessionWord> sessionWords = SessionComposer.compose(
+      dueWords: dueWords,
+      newWords: const <Word>[],
+      fallbackWords: const <Word>[],
+      size: dueWords.length,
+    );
+
+    final List<Word> pool = await _vocabularyRepository.allWords();
+    final List<SessionQuestion> questions = _optionsGenerator.createQuestions(
+      words: sessionWords,
+      pool: pool,
+      random: _random,
+    );
+
+    return LearningSession(
+      words: sessionWords,
+      questions: questions,
+      dailyGoal: dueWords.length,
     );
   }
 

@@ -45,6 +45,23 @@ class ProgressRepository {
         0;
   }
 
+  /// The earliest future review timestamp across all known words, or `null`
+  /// when nothing is scheduled. Used for the empty review state on Home.
+  Future<DateTime?> nextReviewDate(DateTime now) async {
+    final Database db = await _database.database;
+    final rows = await db.rawQuery(
+      'SELECT MIN(next_review_at) AS next_review_at '
+      'FROM word_progress WHERE next_review_at > ?',
+      <Object?>[now.millisecondsSinceEpoch],
+    );
+    if (rows.isEmpty) return null;
+    final Object? value = rows.first['next_review_at'];
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    return null;
+  }
+
   Future<int> totalWordsStudied() async {
     final Database db = await _database.database;
     return Sqflite.firstIntValue(
