@@ -26,6 +26,7 @@ class HomeSnapshot {
     required this.currentStreak,
     required this.weekActivity,
     required this.today,
+    this.nextReviewAt,
   });
 
   final int dailyGoal;
@@ -41,8 +42,12 @@ class HomeSnapshot {
   final int currentStreak;
   final List<DailyActivity> weekActivity;
   final DateTime today;
+  final DateTime? nextReviewAt;
 
   bool get goalMet => completedToday >= dailyGoal;
+
+  /// True when there is at least one review due right now.
+  bool get hasDueReviews => dueReviews > 0;
 
   double get goalProgress {
     if (dailyGoal <= 0) return 0;

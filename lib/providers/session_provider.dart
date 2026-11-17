@@ -49,6 +49,38 @@ class SessionController extends Notifier<SessionState> {
     }
   }
 
+  /// Starts a dedicated review session with all currently due words.
+  ///
+  /// No new words are added. Every answered question is persisted through the
+  /// existing spaced-repetition scheduler.
+  Future<LearningSession?> startReviewSession() async {
+    state = const SessionState(phase: SessionPhase.loading);
+    try {
+      await ref.read(appBootstrapProvider.future);
+      final SessionRepository repository = ref.read(sessionRepositoryProvider);
+      final LearningSession session = await repository.createReviewSession();
+      state = SessionState(
+        phase: SessionPhase.learning,
+        session: session,
+        recall: RecallEngine(questions: session.questions),
+        isReviewSession: true,
+      );
+      return session;
+    } on SessionUnavailableException catch (error) {
+      state = SessionState(
+        phase: SessionPhase.error,
+        errorMessage: error.message,
+      );
+      return null;
+    } catch (_) {
+      state = const SessionState(
+        phase: SessionPhase.error,
+        errorMessage: 'Takrorlash mashqini boshlashda xatolik yuz berdi. Iltimos, qayta urinib ko‘ring.',
+      );
+      return null;
+    }
+  }
+
   /// Reveals the meaning of the current Learn word.
   void revealMeaning() {
     if (state.phase != SessionPhase.learning || state.meaningRevealed) return;

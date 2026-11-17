@@ -7,6 +7,7 @@ import 'package:soz_atlas/data/database/app_database.dart';
 import 'package:soz_atlas/domain/models/session_models.dart';
 import 'package:soz_atlas/domain/session/recall_engine.dart';
 import 'package:soz_atlas/providers/app_providers.dart';
+import 'package:soz_atlas/providers/home_providers.dart';
 import 'package:soz_atlas/providers/session_provider.dart';
 import 'package:soz_atlas/providers/session_state.dart';
 import 'package:soz_atlas/providers/settings_provider.dart';
@@ -271,4 +272,143 @@ void main() {
     expect(find.text('Boshlash'), findsOneWidget);
     await pumpUntilFound(tester, find.text('0 / 10 bajarildi'));
   });
+
+  testWidgets('home shows review card with due count when words are due', (
+    WidgetTester tester,
+  ) async {
+    final ProviderContainer container = await pumpApp(tester);
+    await container.read(appDatabaseProvider).resetLearningProgress();
+    container.invalidate(homeSnapshotProvider);
+
+    // Make one word due by reviewing it in the past.
+    final sessions = container.read(sessionRepositoryProvider);
+    final vocabulary = container.read(vocabularyRepositoryProvider);
+
+    final allWords = await vocabulary.allWords();
+    await sessions.recordAnswer(
+      word: allWords[0],
+      isCorrect: true,
+      isNewWord: true,
+      isRetry: false,
+      now: DateTime(2026, 11, 4, 10), // due 2026-11-05
+    );
+
+    container.invalidate(homeSnapshotProvider);
+
+    await pumpUntilFound(tester, find.text('Takrorlash vaqti'));
+    expect(find.text('1 ta so‘z takrorlashga tayyor'), findsOneWidget);
+    expect(find.text('Takrorlashni boshlash'), findsOneWidget);
+  });
+
+  testWidgets('home shows empty review state when nothing is due', (
+    WidgetTester tester,
+  ) async {
+    final ProviderContainer container = await pumpApp(tester);
+    await container.read(appDatabaseProvider).resetLearningProgress();
+    container.invalidate(homeSnapshotProvider);
+
+    await pumpUntilFound(tester, find.text('Takrorlash vaqti'));
+    expect(
+      find.text('Hozircha takrorlash kerak bo‘lgan so‘z yo‘q.'),
+      findsOneWidget,
+    );
+    expect(find.text('Takrorlashni boshlash'), findsNothing);
+  });
+
+  testWidgets('review now starts a review-only session from Home', (
+    WidgetTester tester,
+  ) async {
+    final ProviderContainer container = await pumpApp(tester);
+    await container.read(appDatabaseProvider).resetLearningProgress();
+    container.invalidate(homeSnapshotProvider);
+
+    final sessions = container.read(sessionRepositoryProvider);
+    final vocabulary = container.read(vocabularyRepositoryProvider);
+
+    final allWords = await vocabulary.allWords();
+    await sessions.recordAnswer(
+      word: allWords[0],
+      isCorrect: true,
+      isNewWord: true,
+      isRetry: false,
+      now: DateTime(2026, 11, 4, 10), // due 2026-11-05
+    );
+
+    container.invalidate(homeSnapshotProvider);
+    await pumpUntilFound(tester, find.text('Takrorlashni boshlash'));
+
+    await tester.ensureVisible(find.text('Takrorlashni boshlash'));
+    await tester.tap(find.text('Takrorlashni boshlash'));
+    await tester.pumpAndSettle();
+
+    // The controller should now hold a review-only session.
+    final SessionState state = container.read(sessionProvider);
+    expect(state.phase, SessionPhase.learning);
+    expect(state.isReviewSession, isTrue);
+    expect(state.session!.newWordCount, 0);
+    expect(state.session!.dueWordCount, 1);
+  });
+
+  testWidgets(
+    'review session completes and returns to home with updated count',
+    (WidgetTester tester) async {
+      final ProviderContainer container = await pumpApp(tester);
+      await container.read(appDatabaseProvider).resetLearningProgress();
+      container.invalidate(homeSnapshotProvider);
+
+      final sessions = container.read(sessionRepositoryProvider);
+      final vocabulary = container.read(vocabularyRepositoryProvider);
+
+      final allWords = await vocabulary.allWords();
+      await sessions.recordAnswer(
+        word: allWords[0],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 4, 10), // due 2026-11-05
+      );
+
+      container.invalidate(homeSnapshotProvider);
+      await pumpUntilFound(tester, find.text('Takrorlashni boshlash'));
+      await tester.tap(find.text('Takrorlashni boshlash'));
+      await tester.pumpAndSettle();
+
+      await pumpUntilFound(tester, find.text('TAKORLASH'));
+
+      // Reveal the word, then answer correctly in recall.
+      await tester.tap(find.text('Ma’nosini ko‘rish'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tekshirish'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('TEKSHIRISH'), findsOneWidget);
+
+      final SessionState state = container.read(sessionProvider);
+      final RecallEngine engine = state.recall!;
+      final SessionQuestion question = engine.current!;
+      final Finder options = find.byType(AnswerOption);
+      await tester.ensureVisible(options.at(question.correctIndex));
+      await tester.tap(options.at(question.correctIndex));
+      await pumpUntil(
+        tester,
+        container,
+        (SessionState s) => s.recall?.isAnswered == true && !s.isSavingAnswer,
+      );
+
+      await tester.ensureVisible(find.text('Keyingi so‘z'));
+      await tester.tap(find.text('Keyingi so‘z'));
+      await pumpUntilFound(tester, find.text('Ajoyib!'));
+
+      // Back to home.
+      await tester.ensureVisible(find.text('Uy sahifasiga'));
+      await tester.tap(find.text('Uy sahifasiga'));
+      await pumpUntilFound(tester, find.text('Takrorlash vaqti'));
+
+      // The word is no longer due (correct answer moved it forward).
+      expect(
+        find.text('Hozircha takrorlash kerak bo‘lgan so‘z yo‘q.'),
+        findsOneWidget,
+      );
+    },
+  );
 }

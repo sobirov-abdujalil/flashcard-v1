@@ -19,6 +19,7 @@ import '../../shared/widgets/gradient_background.dart';
 import '../../shared/widgets/gradient_button.dart';
 import 'widgets/atlas_card.dart';
 import 'widgets/home_header.dart';
+import 'widgets/review_card.dart';
 import 'widgets/weekly_activity_card.dart';
 
 /// Screen 1 — Home.
@@ -73,6 +74,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               snapshot: snapshot,
               startingSession: starting,
               onStart: () => launchLearnSession(context, ref),
+              onStartReview: () => launchReviewSession(context, ref),
               onOpenSettings: () => showSettingsSheet(context),
             ),
             loading: () => const _HomeLoading(),
@@ -94,12 +96,14 @@ class _HomeContent extends StatelessWidget {
     required this.snapshot,
     required this.startingSession,
     required this.onStart,
+    required this.onStartReview,
     required this.onOpenSettings,
   });
 
   final HomeSnapshot snapshot;
   final bool startingSession;
   final VoidCallback onStart;
+  final VoidCallback onStartReview;
   final VoidCallback onOpenSettings;
 
   @override
@@ -150,6 +154,8 @@ class _HomeContent extends StatelessWidget {
               semanticLabel: 'Bugungi mashqni boshlash',
             ),
           ),
+          const SizedBox(height: AppConstants.space16),
+          ReviewCard(snapshot: snapshot, onStartReview: onStartReview),
           const SizedBox(height: AppConstants.space16),
           Row(
             children: <Widget>[

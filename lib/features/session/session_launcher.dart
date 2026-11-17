@@ -33,6 +33,33 @@ Future<void> launchLearnSession(
   }
 }
 
+/// Starts a dedicated review session and navigates to the Learn screen.
+///
+/// Used by Home ("Takrorlashni boshlash").
+Future<void> launchReviewSession(
+  BuildContext context,
+  WidgetRef ref, {
+  bool replaceCurrentRoute = false,
+}) async {
+  final SessionController controller = ref.read(sessionProvider.notifier);
+  final bool created = (await controller.startReviewSession()) != null;
+  if (!context.mounted) return;
+
+  if (!created) {
+    final String message =
+        ref.read(sessionProvider).errorMessage ??
+        'Takrorlash mashqini boshlashda xatolik yuz berdi.';
+    showAppSnack(context, message, isError: true);
+    return;
+  }
+
+  if (replaceCurrentRoute) {
+    await Navigator.of(context).pushReplacementNamed(AppRoutes.learn);
+  } else {
+    await Navigator.of(context).pushNamed(AppRoutes.learn);
+  }
+}
+
 /// Leaves the current session and returns to Home, resetting in-memory state.
 Future<void> exitSessionToHome(BuildContext context, WidgetRef ref) async {
   final bool confirmed = await showExitSessionDialog(context);

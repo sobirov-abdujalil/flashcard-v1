@@ -16,6 +16,7 @@ class SessionState {
     this.recall,
     this.learnIndex = 0,
     this.meaningRevealed = false,
+    this.isReviewSession = false,
     this.summary,
     this.errorMessage,
     this.warningMessage,
@@ -27,6 +28,7 @@ class SessionState {
   final RecallEngine? recall;
   final int learnIndex;
   final bool meaningRevealed;
+  final bool isReviewSession;
   final SessionSummary? summary;
   final String? errorMessage;
 
@@ -91,6 +93,7 @@ class SessionState {
     RecallEngine? recall,
     int? learnIndex,
     bool? meaningRevealed,
+    bool? isReviewSession,
     SessionSummary? summary,
     String? errorMessage,
     String? warningMessage,
@@ -105,6 +108,7 @@ class SessionState {
       recall: recall ?? this.recall,
       learnIndex: learnIndex ?? this.learnIndex,
       meaningRevealed: meaningRevealed ?? this.meaningRevealed,
+      isReviewSession: isReviewSession ?? this.isReviewSession,
       summary: clearSummary ? null : (summary ?? this.summary),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       warningMessage: clearWarning

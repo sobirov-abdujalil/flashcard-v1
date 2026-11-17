@@ -550,4 +550,335 @@ void main() {
       expect(snapshot.dueReviews, 0);
     });
   });
+
+  group('review session creation', () {
+    test('creates a session with only due words, no new words', () async {
+      // Make word 0 due by reviewing it in the past.
+      await sessions.recordAnswer(
+        word: (await vocabulary.allWords())[0],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 4, 10), // due 2026-11-05
+      );
+
+      final LearningSession session = await sessions.createReviewSession(
+        now: day1,
+      );
+
+      expect(session.newWordCount, 0);
+      expect(session.dueWordCount, 1);
+      expect(session.words, hasLength(1));
+      expect(session.words.first.isDue, isTrue);
+      expect(session.words.first.isNew, isFalse);
+      expect(session.questions, hasLength(1));
+    });
+
+    test('excludes words with future review timestamps', () async {
+      final List<Word> all = await vocabulary.allWords();
+
+      // Word 0: due in the past.
+      await sessions.recordAnswer(
+        word: all[0],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 4, 10), // due 2026-11-05
+      );
+      // Word 1: due in the future.
+      await sessions.recordAnswer(
+        word: all[1],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 20, 10), // due 2026-11-21
+      );
+
+      final LearningSession session = await sessions.createReviewSession(
+        now: day1, // 2026-11-17
+      );
+
+      expect(session.dueWordCount, 1);
+      expect(session.words.first.word.id, all[0].id);
+    });
+
+    test('includes overdue words and prioritises oldest due first', () async {
+      final List<Word> all = await vocabulary.allWords();
+
+      // Word 2: due Oct 21 (oldest).
+      await sessions.recordAnswer(
+        word: all[2],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 10, 20, 10),
+      );
+      // Word 0: due Nov 5.
+      await sessions.recordAnswer(
+        word: all[0],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 4, 10),
+      );
+      // Word 1: due Nov 11.
+      await sessions.recordAnswer(
+        word: all[1],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 10, 10),
+      );
+
+      final LearningSession session = await sessions.createReviewSession(
+        now: day1,
+      );
+
+      expect(session.dueWordCount, 3);
+      final List<int> ids = session.words
+          .map((SessionWord entry) => entry.word.id)
+          .toList();
+      expect(ids, <int>[3, 1, 2]);
+      for (final SessionWord entry in session.words) {
+        expect(entry.isDue, isTrue);
+        expect(entry.isNew, isFalse);
+      }
+    });
+
+    test('never contains duplicate words', () async {
+      final List<Word> all = await vocabulary.allWords();
+
+      // Make several words due.
+      for (int index = 0; index < 5; index++) {
+        await sessions.recordAnswer(
+          word: all[index],
+          isCorrect: true,
+          isNewWord: true,
+          isRetry: false,
+          now: DateTime(2026, 11, 4, 10),
+        );
+      }
+
+      final LearningSession session = await sessions.createReviewSession(
+        now: day1,
+      );
+
+      final List<int> ids = session.words
+          .map((SessionWord entry) => entry.word.id)
+          .toList();
+      expect(ids.toSet(), hasLength(ids.length));
+    });
+
+    test('throws when there are no due words', () async {
+      expect(
+        sessions.createReviewSession(now: day1),
+        throwsA(isA<SessionUnavailableException>()),
+      );
+    });
+  });
+
+  group('review answer persistence', () {
+    test('a correct review answer advances the schedule', () async {
+      final List<Word> all = await vocabulary.allWords();
+      final Word word = all[0];
+
+      await sessions.recordAnswer(
+        word: word,
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 4, 10), // due 2026-11-05
+      );
+
+      final LearningSession session = await sessions.createReviewSession(
+        now: day1,
+      );
+
+      await sessions.recordAnswer(
+        word: session.words.first.word,
+        isCorrect: true,
+        isNewWord: false,
+        isRetry: false,
+        now: day1,
+      );
+
+      final WordProgress saved = (await progress.progressFor(word.id))!;
+      expect(saved.successfulRepetitions, 2);
+      expect(
+        saved.nextReviewAt,
+        DateTime(2026, 11, 17),
+      ); // +3 days from day1 (Nov 14)
+      expect(saved.totalAttempts, 2);
+      expect(saved.totalCorrect, 2);
+    });
+
+    test(
+      'an incorrect review answer uses the existing lapse behavior',
+      () async {
+        final List<Word> all = await vocabulary.allWords();
+        final Word word = all[0];
+
+        await sessions.recordAnswer(
+          word: word,
+          isCorrect: true,
+          isNewWord: true,
+          isRetry: false,
+          now: DateTime(2026, 11, 4, 10),
+        );
+
+        final LearningSession session = await sessions.createReviewSession(
+          now: day1,
+        );
+
+        await sessions.recordAnswer(
+          word: session.words.first.word,
+          isCorrect: false,
+          isNewWord: false,
+          isRetry: false,
+          now: day1,
+        );
+
+        final WordProgress saved = (await progress.progressFor(word.id))!;
+        expect(saved.successfulRepetitions, 0);
+        expect(saved.lapseCount, 1);
+        expect(
+          saved.nextReviewAt,
+          DateTime(2026, 11, 15),
+        ); // tomorrow from day1 (Nov 14)
+      },
+    );
+  });
+
+  group('due count and next review date', () {
+    test('dueReviewCount returns zero when nothing is due', () async {
+      final int count = await progress.dueReviewCount(day1);
+      expect(count, 0);
+    });
+
+    test('dueReviewCount counts due words', () async {
+      final List<Word> all = await vocabulary.allWords();
+      await sessions.recordAnswer(
+        word: all[0],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 4, 10), // due 2026-11-05
+      );
+      await sessions.recordAnswer(
+        word: all[1],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 10, 10), // due 2026-11-11
+      );
+
+      expect(await progress.dueReviewCount(day1), 2);
+    });
+
+    test('future words are excluded from due count', () async {
+      final List<Word> all = await vocabulary.allWords();
+      await sessions.recordAnswer(
+        word: all[0],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 20, 10), // due 2026-11-21
+      );
+
+      expect(await progress.dueReviewCount(day1), 0);
+    });
+
+    test('nextReviewDate returns null when nothing is scheduled', () async {
+      expect(await progress.nextReviewDate(day1), isNull);
+    });
+
+    test('nextReviewDate returns the earliest future review', () async {
+      final List<Word> all = await vocabulary.allWords();
+
+      // Due Nov 11 — in the past relative to day1 (Nov 17), so excluded.
+      await sessions.recordAnswer(
+        word: all[0],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 10, 10), // due 2026-11-11
+      );
+      // Due Nov 20 — in the future relative to day1, so included.
+      await sessions.recordAnswer(
+        word: all[1],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 19, 10), // due 2026-11-20
+      );
+
+      final DateTime? next = await progress.nextReviewDate(day1);
+      expect(next, DateTime(2026, 11, 20));
+    });
+
+    test(
+      'dashboard reports zero due and next review when nothing is due',
+      () async {
+        final HomeSnapshot snapshot = await dashboard.load(
+          dailyGoal: 5,
+          now: day1,
+        );
+        expect(snapshot.dueReviews, 0);
+        expect(snapshot.hasDueReviews, isFalse);
+        expect(snapshot.nextReviewAt, isNull);
+      },
+    );
+
+    test(
+      'dashboard reports due count and no next review when reviews are due',
+      () async {
+        final List<Word> all = await vocabulary.allWords();
+        await sessions.recordAnswer(
+          word: all[0],
+          isCorrect: true,
+          isNewWord: true,
+          isRetry: false,
+          now: DateTime(2026, 11, 4, 10), // due 2026-11-05
+        );
+
+        final HomeSnapshot snapshot = await dashboard.load(
+          dailyGoal: 5,
+          now: day1,
+        );
+        expect(snapshot.dueReviews, 1);
+        expect(snapshot.hasDueReviews, isTrue);
+        expect(snapshot.nextReviewAt, isNull);
+      },
+    );
+
+    test('due count drops to zero after all reviews are answered', () async {
+      final List<Word> all = await vocabulary.allWords();
+
+      await sessions.recordAnswer(
+        word: all[0],
+        isCorrect: true,
+        isNewWord: true,
+        isRetry: false,
+        now: DateTime(2026, 11, 4, 10), // due 2026-11-05
+      );
+
+      final LearningSession session = await sessions.createReviewSession(
+        now: day1,
+      );
+      await sessions.recordAnswer(
+        word: session.words.first.word,
+        isCorrect: true,
+        isNewWord: false,
+        isRetry: false,
+        now: day1,
+      );
+
+      final HomeSnapshot snapshot = await dashboard.load(
+        dailyGoal: 5,
+        now: day1,
+      );
+      expect(snapshot.dueReviews, 0);
+      expect(snapshot.hasDueReviews, isFalse);
+    });
+  });
 }
