@@ -1,0 +1,52 @@
+name: soz_atlas
+description: "So'z Atlas — o'zbek tilida so'zlashuvchilar uchun ingliz so'zlarini kundalik mashqlar va takrorlash orqali yodlash ilovasi. To'liq offline."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Application state management.
+  flutter_riverpod: ^3.5.0
+  # Local SQLite persistence.
+  sqflite: ^2.4.6
+  # Path helpers for database file construction.
+  path: ^1.9.1
+  # Local preference storage (theme, daily goal).
+  shared_preferences: ^2.5.6
+  # Offline device text-to-speech for pronunciation.
+  flutter_tts: ^4.2.5
+  # Native Android share sheet.
+  share_plus: ^13.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  # sqlite FFI bindings so the data layer can be unit tested on the host.
+  sqflite_common_ffi: ^2.4.7
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/fonts/
+
+  fonts:
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Manrope-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Manrope-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Manrope-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Manrope-ExtraBold.ttf
+          weight: 800

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand palette for the native launcher, icon and splash screen. -->
+    <color name="brand_background">#090E1D</color>
+    <color name="brand_background_secondary">#111A2D</color>
+    <color name="ic_launcher_background">#090E1D</color>
+</resources>

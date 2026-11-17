@@ -1,0 +1,14 @@
+# So'z Atlas — release signing template
+#
+# 1. Generate an upload keystore ONCE and keep it out of version control:
+#      keytool -genkeypair -v -keystore soz-atlas-upload.jks ^
+#        -alias soz-atlas -keyalg RSA -keysize 2048 -validity 10000
+# 2. Copy this file to `android/key.properties` and fill in the real values.
+# 3. Never commit key.properties, the .jks file, or the passwords.
+#
+# Paths are resolved relative to the `android/` directory.
+
+storePassword=REPLACE_WITH_YOUR_STORE_PASSWORD
+keyPassword=REPLACE_WITH_YOUR_KEY_PASSWORD
+keyAlias=soz-atlas
+storeFile=soz-atlas-upload.jks
